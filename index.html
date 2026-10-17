@@ -1,2 +1,54 @@
-
-<h1>My AI hub</h1>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My AI hub</title>
+<style>
+body{margin:0;background:#06060a;color:#e8e8f0;font-family:monospace;display:flex;flex-direction:column;height:100dvh}
+#log{flex:1;overflow-y:auto;padding:12px}
+.m{margin:8px 0;padding:10px;border:1px solid #2a2a3a;white-space:pre-wrap}
+.u{border-color:#6b5bd6}
+form{display:flex;gap:8px;padding:8px;border-top:1px solid #2a2a3a}
+input{flex:1;background:#0d0d14;color:inherit;border:1px solid #2a2a3a;padding:12px;font:inherit}
+button{background:#6b5bd6;color:#fff;border:0;padding:0 16px;font:inherit}
+</style>
+</head>
+<body>
+<div id="log"></div>
+<form id="f"><input id="t" placeholder="Message" autocomplete="off"><button>Send</button></form>
+<script>
+let secret = localStorage.getItem('app_secret') || prompt('Enter app secret');
+if (secret) localStorage.setItem('app_secret', secret);
+const log = document.getElementById('log'), f = document.getElementById('f'), t = document.getElementById('t');
+const msgs = [];
+function add(role, text) {
+  const d = document.createElement('div');
+  d.className = 'm ' + (role === 'user' ? 'u' : '');
+  d.textContent = text;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+f.onsubmit = async e => {
+  e.preventDefault();
+  const text = t.value.trim();
+  if (!text) return;
+  t.value = '';
+  msgs.push({ role: 'user', content: text });
+  add('user', text);
+  try {
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-app-secret': secret },
+      body: JSON.stringify({ messages: msgs })
+    });
+    const d = await r.json();
+    if (r.status === 401) { localStorage.removeItem('app_secret'); add('assistant', 'Wrong secret. Reload and re-enter.'); return; }
+    if (!r.ok) { add('assistant', 'Error: ' + JSON.stringify(d.error)); return; }
+    msgs.push({ role: 'assistant', content: d.reply });
+    add('assistant', d.reply);
+  } catch (err) { add('assistant', 'Network error'); }
+};
+</script>
+</body>
+</html>
