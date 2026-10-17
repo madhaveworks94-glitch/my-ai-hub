@@ -11,33 +11,69 @@ body{margin:0;background:#06060a;color:#e8e8f0;font-family:monospace;display:fle
 #bar button{background:#0d0d14;color:inherit;border:1px solid #2a2a3a;padding:8px 12px;font:inherit}
 #side{position:fixed;left:0;top:53px;bottom:0;width:80%;max-width:320px;background:#0d0d14;border-right:1px solid #2a2a3a;overflow-y:auto;z-index:5}
 #side[hidden]{display:none}
-.row{display:flex;border-bottom:1px solid #1c1c28}
+.row{display:flex;align-items:center;border-bottom:1px solid #1c1c28}
 .row .nm{flex:1;text-align:left;background:none;color:inherit;border:0;padding:14px 12px;font:inherit}
 .row .x{background:none;color:#8a8aa0;border:0;padding:0 14px;font:inherit}
 #log{flex:1;overflow-y:auto;padding:12px}
-.m{margin:8px 0;padding:10px;border:1px solid #2a2a3a;white-space:pre-wrap}
+.m{margin:8px 0;padding:10px;border:1px solid #2a2a3a}
+.m .tx{white-space:pre-wrap}
+.m pre{margin:8px 0;padding:8px;background:#0d0d14;overflow-x:auto;white-space:pre}
 .u{border-color:#6b5bd6}
 .err{border-color:#a33;color:#f99}
-.lk{display:block;margin-top:8px;background:none;border:0;color:#8a8aa0;padding:0;font:inherit;text-decoration:underline}
+.lk{display:inline-block;margin:8px 12px 0 0;background:none;border:0;color:#8a8aa0;padding:0;font:inherit;text-decoration:underline}
+.art{display:inline-block;margin:8px 8px 0 0;background:#6b5bd6;color:#fff;border:0;padding:10px 14px;font:inherit}
 #editbar{padding:6px 10px;color:#b8a8ff;border-top:1px solid #2a2a3a}
 #editbar[hidden]{display:none}
 #editbar button{background:none;border:0;color:#8a8aa0;font:inherit;text-decoration:underline}
 form{display:flex;gap:8px;padding:8px;border-top:1px solid #2a2a3a}
-input{flex:1;background:#0d0d14;color:inherit;border:1px solid #2a2a3a;padding:12px;font:inherit}
+input,textarea{background:#0d0d14;color:inherit;border:1px solid #2a2a3a;padding:12px;font:inherit}
+form input{flex:1}
 form button{background:#6b5bd6;color:#fff;border:0;padding:0 16px;font:inherit}
+.ov{position:fixed;inset:0;background:#06060a;z-index:20;display:flex;flex-direction:column}
+.ov[hidden]{display:none}
+.hd{display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #2a2a3a}
+.hd span{flex:1}
+.hd button,.btn{background:#0d0d14;color:inherit;border:1px solid #2a2a3a;padding:8px 12px;font:inherit}
+#af{flex:1;border:0;background:#fff}
+#skbody{flex:1;overflow-y:auto;padding:12px}
+#skbody input,#skbody textarea{width:100%;box-sizing:border-box;margin:6px 0}
+#skbody textarea{min-height:120px}
+.srow{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #1c1c28}
+.srow .sn{flex:1}
+.srow input{width:22px;height:22px;margin:0;padding:0}
+.btn.p{background:#6b5bd6;color:#fff;border-color:#6b5bd6}
 </style>
 </head>
 <body>
-<div id="bar"><button id="menu">☰</button><span id="ttl">My AI hub</span><button id="newc">+ New</button></div>
+<div id="bar"><button id="menu">☰</button><span id="ttl">My AI hub</span><button id="skbtn">Skills</button><button id="newc">+ New</button></div>
 <div id="side" hidden></div>
 <div id="log"></div>
 <div id="editbar" hidden>Editing a message. <button type="button" id="cancel">Cancel</button></div>
 <form id="f"><input id="t" placeholder="Message" autocomplete="off"><button>Send</button></form>
+
+<div id="art" class="ov" hidden>
+  <div class="hd"><span>Artifact</span><button id="adl">Download</button><button id="acl">Close</button></div>
+  <iframe id="af" sandbox="allow-scripts"></iframe>
+</div>
+
+<div id="sk" class="ov" hidden>
+  <div class="hd"><span>Skills</span><button id="skx">Close</button></div>
+  <div id="skbody">
+    <div id="sklist"></div>
+    <h4 id="skform">Add a skill</h4>
+    <input id="sn" placeholder="Skill name">
+    <textarea id="si" placeholder="Instructions the AI should follow"></textarea>
+    <button class="btn p" id="sksave">Save skill</button>
+    <button class="btn" id="skclear">Clear</button>
+  </div>
+</div>
+
 <script>
 let secret = localStorage.getItem('app_secret') || prompt('Enter app secret');
 if (secret) localStorage.setItem('app_secret', secret);
 const $ = id => document.getElementById(id);
 let convId = null, msgs = [], convs = [], editing = null, busy = false, lastError = '';
+let skills = [], editingSkill = null, curArt = null;
 
 async function api(method, qs, body) {
   const r = await fetch('/api/chat' + (qs || ''), {
@@ -52,22 +88,63 @@ async function api(method, qs, body) {
   return d;
 }
 const run = fn => async (...a) => { try { await fn(...a); } catch (e) { busy = false; lastError = e.message; render(); } };
+const runA = fn => async (...a) => { try { await fn(...a); } catch (e) { alert(e.message); } };
 
+function parts(content) {
+  const out = [];
+  const re = /```(\w*)\n([\s\S]*?)(?:```|$)/g;
+  let last = 0, m;
+  while ((m = re.exec(content))) {
+    if (m.index > last) out.push({ t: 'text', v: content.slice(last, m.index) });
+    out.push({ t: 'code', lang: m[1].toLowerCase(), v: m[2] });
+    last = re.lastIndex;
+  }
+  if (last < content.length) out.push({ t: 'text', v: content.slice(last) });
+  return out;
+}
+function openArt(lang, code) {
+  const html = lang === 'svg' ? '<!doctype html><body style="margin:0;background:#fff">' + code : code;
+  curArt = html;
+  $('af').srcdoc = html;
+  $('art').hidden = false;
+}
+function addText(box, v) {
+  if (!v.trim()) return;
+  const c = document.createElement('div');
+  c.className = 'tx';
+  c.textContent = v.trim();
+  box.appendChild(c);
+}
 function render() {
   const log = $('log');
   log.innerHTML = '';
   msgs.forEach((m, i) => {
     const d = document.createElement('div');
     d.className = 'm' + (m.role === 'user' ? ' u' : '');
-    const c = document.createElement('div');
-    c.textContent = m.content;
-    d.appendChild(c);
-    if (m.role === 'user' && m.id) {
-      const b = document.createElement('button');
-      b.className = 'lk';
-      b.textContent = 'Edit';
-      b.onclick = () => startEdit(i);
-      d.appendChild(b);
+    if (m.role === 'user') {
+      addText(d, m.content);
+      if (m.id) {
+        const b = document.createElement('button');
+        b.className = 'lk';
+        b.textContent = 'Edit';
+        b.onclick = () => startEdit(i);
+        d.appendChild(b);
+      }
+    } else {
+      parts(m.content).forEach(p => {
+        if (p.t === 'text') { addText(d, p.v); return; }
+        if (p.lang === 'html' || p.lang === 'svg') {
+          const b = document.createElement('button');
+          b.className = 'art';
+          b.textContent = 'Open artifact';
+          b.onclick = () => openArt(p.lang, p.v);
+          d.appendChild(b);
+        } else {
+          const pre = document.createElement('pre');
+          pre.textContent = p.v;
+          d.appendChild(pre);
+        }
+      });
     }
     log.appendChild(d);
   });
@@ -121,9 +198,65 @@ async function delConv(id) {
 function startEdit(i) { editing = i; $('t').value = msgs[i].content; $('editbar').hidden = false; $('t').focus(); }
 function cancelEdit() { editing = null; $('editbar').hidden = true; }
 
+/* skills */
+function renderSkills() {
+  const box = $('sklist');
+  box.innerHTML = '';
+  if (!skills.length) box.textContent = 'No skills yet.';
+  skills.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'srow';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = s.enabled;
+    cb.onchange = runA(async () => {
+      await api('POST', '', { action: 'skill_toggle', id: s.id, enabled: cb.checked });
+      s.enabled = cb.checked;
+    });
+    const nm = document.createElement('span');
+    nm.className = 'sn';
+    nm.textContent = s.name;
+    const ed = document.createElement('button');
+    ed.className = 'btn';
+    ed.textContent = 'Edit';
+    ed.onclick = () => { editingSkill = s.id; $('sn').value = s.name; $('si').value = s.instructions; $('skform').textContent = 'Edit skill'; };
+    const x = document.createElement('button');
+    x.className = 'btn';
+    x.textContent = '✕';
+    x.onclick = runA(async () => {
+      if (!confirm('Delete this skill?')) return;
+      await api('POST', '', { action: 'skill_delete', id: s.id });
+      await loadSkills();
+    });
+    row.append(cb, nm, ed, x);
+    box.appendChild(row);
+  });
+}
+async function loadSkills() { const d = await api('GET', '?skills=1'); skills = d.skills; renderSkills(); }
+function clearSkillForm() { editingSkill = null; $('sn').value = ''; $('si').value = ''; $('skform').textContent = 'Add a skill'; }
+
 $('menu').onclick = () => { $('side').hidden = !$('side').hidden; };
 $('newc').onclick = run(newChat);
 $('cancel').onclick = () => { cancelEdit(); $('t').value = ''; };
+$('skbtn').onclick = runA(async () => { await loadSkills(); $('sk').hidden = false; });
+$('skx').onclick = () => { $('sk').hidden = true; };
+$('skclear').onclick = clearSkillForm;
+$('sksave').onclick = runA(async () => {
+  const name = $('sn').value.trim(), instructions = $('si').value.trim();
+  if (!name || !instructions) { alert('Add a name and instructions.'); return; }
+  const cur = skills.find(s => s.id === editingSkill);
+  await api('POST', '', { action: 'skill_save', id: editingSkill, name, instructions, enabled: cur ? cur.enabled : true });
+  clearSkillForm();
+  await loadSkills();
+});
+$('acl').onclick = () => { $('art').hidden = true; $('af').srcdoc = ''; };
+$('adl').onclick = () => {
+  if (!curArt) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([curArt], { type: 'text/html' }));
+  a.download = 'artifact.html';
+  a.click();
+};
 
 $('f').onsubmit = async e => {
   e.preventDefault();
