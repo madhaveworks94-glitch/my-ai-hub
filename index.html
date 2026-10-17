@@ -29,6 +29,15 @@ function add(role, text) {
   log.appendChild(d);
   log.scrollTop = log.scrollHeight;
 }
+(async () => {
+  if (!secret) return;
+  try {
+    const r = await fetch('/api/chat', { headers: { 'x-app-secret': secret } });
+    if (!r.ok) return;
+    const d = await r.json();
+    for (const m of d.messages) { msgs.push(m); add(m.role, m.content); }
+  } catch (e) {}
+})();
 f.onsubmit = async e => {
   e.preventDefault();
   const text = t.value.trim();
