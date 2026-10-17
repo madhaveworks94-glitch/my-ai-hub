@@ -6,58 +6,166 @@
 <title>My AI hub</title>
 <style>
 body{margin:0;background:#06060a;color:#e8e8f0;font-family:monospace;display:flex;flex-direction:column;height:100dvh}
+#bar{display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #2a2a3a}
+#ttl{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#bar button{background:#0d0d14;color:inherit;border:1px solid #2a2a3a;padding:8px 12px;font:inherit}
+#side{position:fixed;left:0;top:53px;bottom:0;width:80%;max-width:320px;background:#0d0d14;border-right:1px solid #2a2a3a;overflow-y:auto;z-index:5}
+#side[hidden]{display:none}
+.row{display:flex;border-bottom:1px solid #1c1c28}
+.row .nm{flex:1;text-align:left;background:none;color:inherit;border:0;padding:14px 12px;font:inherit}
+.row .x{background:none;color:#8a8aa0;border:0;padding:0 14px;font:inherit}
 #log{flex:1;overflow-y:auto;padding:12px}
 .m{margin:8px 0;padding:10px;border:1px solid #2a2a3a;white-space:pre-wrap}
 .u{border-color:#6b5bd6}
+.err{border-color:#a33;color:#f99}
+.lk{display:block;margin-top:8px;background:none;border:0;color:#8a8aa0;padding:0;font:inherit;text-decoration:underline}
+#editbar{padding:6px 10px;color:#b8a8ff;border-top:1px solid #2a2a3a}
+#editbar[hidden]{display:none}
+#editbar button{background:none;border:0;color:#8a8aa0;font:inherit;text-decoration:underline}
 form{display:flex;gap:8px;padding:8px;border-top:1px solid #2a2a3a}
 input{flex:1;background:#0d0d14;color:inherit;border:1px solid #2a2a3a;padding:12px;font:inherit}
-button{background:#6b5bd6;color:#fff;border:0;padding:0 16px;font:inherit}
+form button{background:#6b5bd6;color:#fff;border:0;padding:0 16px;font:inherit}
 </style>
 </head>
 <body>
+<div id="bar"><button id="menu">☰</button><span id="ttl">My AI hub</span><button id="newc">+ New</button></div>
+<div id="side" hidden></div>
 <div id="log"></div>
+<div id="editbar" hidden>Editing a message. <button type="button" id="cancel">Cancel</button></div>
 <form id="f"><input id="t" placeholder="Message" autocomplete="off"><button>Send</button></form>
 <script>
 let secret = localStorage.getItem('app_secret') || prompt('Enter app secret');
 if (secret) localStorage.setItem('app_secret', secret);
-const log = document.getElementById('log'), f = document.getElementById('f'), t = document.getElementById('t');
-const msgs = [];
-function add(role, text) {
-  const d = document.createElement('div');
-  d.className = 'm ' + (role === 'user' ? 'u' : '');
-  d.textContent = text;
-  log.appendChild(d);
+const $ = id => document.getElementById(id);
+let convId = null, msgs = [], convs = [], editing = null, busy = false, lastError = '';
+
+async function api(method, qs, body) {
+  const r = await fetch('/api/chat' + (qs || ''), {
+    method,
+    headers: { 'Content-Type': 'application/json', 'x-app-secret': secret },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  let d = {};
+  try { d = await r.json(); } catch (e) {}
+  if (r.status === 401) { localStorage.removeItem('app_secret'); throw new Error('Wrong secret. Reload and re-enter.'); }
+  if (!r.ok) throw new Error(JSON.stringify(d.error || d));
+  return d;
+}
+const run = fn => async (...a) => { try { await fn(...a); } catch (e) { busy = false; lastError = e.message; render(); } };
+
+function render() {
+  const log = $('log');
+  log.innerHTML = '';
+  msgs.forEach((m, i) => {
+    const d = document.createElement('div');
+    d.className = 'm' + (m.role === 'user' ? ' u' : '');
+    const c = document.createElement('div');
+    c.textContent = m.content;
+    d.appendChild(c);
+    if (m.role === 'user' && m.id) {
+      const b = document.createElement('button');
+      b.className = 'lk';
+      b.textContent = 'Edit';
+      b.onclick = () => startEdit(i);
+      d.appendChild(b);
+    }
+    log.appendChild(d);
+  });
+  if (busy) { const d = document.createElement('div'); d.className = 'm'; d.textContent = 'Thinking…'; log.appendChild(d); }
+  if (lastError) { const d = document.createElement('div'); d.className = 'm err'; d.textContent = 'Error: ' + lastError; log.appendChild(d); }
   log.scrollTop = log.scrollHeight;
 }
-(async () => {
-  if (!secret) return;
-  try {
-    const r = await fetch('/api/chat', { headers: { 'x-app-secret': secret } });
-    if (!r.ok) return;
-    const d = await r.json();
-    for (const m of d.messages) { msgs.push(m); add(m.role, m.content); }
-  } catch (e) {}
-})();
-f.onsubmit = async e => {
+function setTitle() { $('ttl').textContent = (convs.find(c => c.id === convId) || {}).title || 'My AI hub'; }
+function renderSide() {
+  const s = $('side');
+  s.innerHTML = '';
+  convs.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const n = document.createElement('button');
+    n.className = 'nm';
+    n.textContent = c.title;
+    n.onclick = run(() => openConv(c.id));
+    const x = document.createElement('button');
+    x.className = 'x';
+    x.textContent = '✕';
+    x.onclick = run(() => delConv(c.id));
+    row.appendChild(n);
+    row.appendChild(x);
+    s.appendChild(row);
+  });
+}
+async function loadList() { const d = await api('GET', '?list=1'); convs = d.conversations; renderSide(); setTitle(); }
+async function openConv(id) {
+  convId = id;
+  localStorage.setItem('conv', id);
+  lastError = '';
+  cancelEdit();
+  const d = await api('GET', '?conversation=' + id);
+  msgs = d.messages;
+  setTitle();
+  render();
+  $('side').hidden = true;
+}
+async function newChat() {
+  const c = await api('POST', '', { action: 'new' });
+  await loadList();
+  await openConv(c.id);
+}
+async function delConv(id) {
+  if (!confirm('Delete this chat?')) return;
+  await api('POST', '', { action: 'delete', conversation_id: id });
+  await loadList();
+  if (convId === id) { if (convs.length) await openConv(convs[0].id); else await newChat(); }
+}
+function startEdit(i) { editing = i; $('t').value = msgs[i].content; $('editbar').hidden = false; $('t').focus(); }
+function cancelEdit() { editing = null; $('editbar').hidden = true; }
+
+$('menu').onclick = () => { $('side').hidden = !$('side').hidden; };
+$('newc').onclick = run(newChat);
+$('cancel').onclick = () => { cancelEdit(); $('t').value = ''; };
+
+$('f').onsubmit = async e => {
   e.preventDefault();
-  const text = t.value.trim();
+  if (busy) return;
+  const text = $('t').value.trim();
   if (!text) return;
-  t.value = '';
-  msgs.push({ role: 'user', content: text });
-  add('user', text);
   try {
-    const r = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-app-secret': secret },
-      body: JSON.stringify({ messages: msgs })
+    if (!convId) await newChat();
+    let truncate = null;
+    if (editing !== null) { truncate = msgs[editing].id; msgs = msgs.slice(0, editing); cancelEdit(); }
+    $('t').value = '';
+    lastError = '';
+    msgs.push({ role: 'user', content: text, id: null });
+    busy = true;
+    render();
+    const d = await api('POST', '', {
+      action: 'chat',
+      conversation_id: convId,
+      truncate_from_id: truncate,
+      messages: msgs.map(m => ({ role: m.role, content: m.content }))
     });
-    const d = await r.json();
-    if (r.status === 401) { localStorage.removeItem('app_secret'); add('assistant', 'Wrong secret. Reload and re-enter.'); return; }
-    if (!r.ok) { add('assistant', 'Error: ' + JSON.stringify(d.error)); return; }
-    msgs.push({ role: 'assistant', content: d.reply });
-    add('assistant', d.reply);
-  } catch (err) { add('assistant', 'Network error'); }
+    msgs[msgs.length - 1].id = d.user_id;
+    msgs.push({ role: 'assistant', content: d.reply, id: d.assistant_id });
+    busy = false;
+    render();
+    loadList().catch(() => {});
+  } catch (err) {
+    busy = false;
+    lastError = err.message;
+    $('t').value = text;
+    try { const r = await api('GET', '?conversation=' + convId); msgs = r.messages; } catch (_) {}
+    render();
+  }
 };
+
+run(async () => {
+  if (!secret) return;
+  await loadList();
+  const saved = Number(localStorage.getItem('conv'));
+  const start = convs.find(c => c.id === saved) || convs[0];
+  if (start) await openConv(start.id); else await newChat();
+})();
 </script>
 </body>
 </html>
