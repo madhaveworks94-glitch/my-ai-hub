@@ -225,7 +225,7 @@ export default async function handler(req, res) {
             attachments: newAtt.length ? newAtt : null,
             att_meta: newAtt.length ? newAtt.map(a => ({ kind: a.kind, name: a.name })) : null,
           },
-          { conversation_id: id, role: 'assistant', content: out.reply },
+          { conversation_id: id, role: 'assistant', content: out.reply, attachments: null, att_meta: null },
         ]),
       });
       const rows = await ins.json();
