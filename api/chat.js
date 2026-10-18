@@ -115,7 +115,7 @@ export default async function handler(req, res) {
         if (!r.ok) return res.status(502).json({ error: rows });
         return res.json({ messages: rows });
       }
-      const r = await sb('conversations?select=id,title&order=id.desc&limit=100');
+      const r = await sb('conversations?select=id,title,created_at&order=id.desc&limit=100');
       const rows = await r.json();
       if (!r.ok) return res.status(502).json({ error: rows });
       return res.json({ conversations: rows });
@@ -154,6 +154,14 @@ export default async function handler(req, res) {
       return res.json({ ok: true });
     }
 
+    if (b.action === 'rename') {
+      const id = Number(b.conversation_id);
+      const title = String(b.title || '').trim().slice(0, 80);
+      if (!Number.isInteger(id) || !title) return res.status(400).json({ error: 'bad rename' });
+      await sb(`conversations?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ title }) });
+      return res.json({ ok: true });
+    }
+
     if (b.action === 'new') {
       const r = await sb('conversations', {
         method: 'POST',
@@ -183,7 +191,6 @@ export default async function handler(req, res) {
 
       const newAtt = sanitize(b.new_attachments);
 
-      // load stored attachments for the last 2 earlier messages that had them
       const wanted = msgs
         .map((m, i) => ({ m, i }))
         .filter(x => x.i < L && Number.isInteger(Number(x.m.id)) && Array.isArray(x.m.att) && x.m.att.length)
