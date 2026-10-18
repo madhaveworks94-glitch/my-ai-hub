@@ -17,6 +17,7 @@ body{margin:0;background:#06060a;color:#e8e8f0;font-family:monospace;display:fle
 #log{flex:1;overflow-y:auto;padding:12px}
 .m{margin:8px 0;padding:10px;border:1px solid #2a2a3a}
 .m .tx{white-space:pre-wrap}
+.m .at{color:#b8a8ff;margin-top:6px}
 .m pre{margin:8px 0;padding:8px;background:#0d0d14;overflow-x:auto;white-space:pre}
 .u{border-color:#6b5bd6}
 .err{border-color:#a33;color:#f99}
@@ -25,10 +26,15 @@ body{margin:0;background:#06060a;color:#e8e8f0;font-family:monospace;display:fle
 #editbar{padding:6px 10px;color:#b8a8ff;border-top:1px solid #2a2a3a}
 #editbar[hidden]{display:none}
 #editbar button{background:none;border:0;color:#8a8aa0;font:inherit;text-decoration:underline}
+#chips{display:flex;flex-wrap:wrap;gap:6px;padding:6px 8px;border-top:1px solid #2a2a3a}
+#chips[hidden]{display:none}
+.chip{background:#0d0d14;border:1px solid #2a2a3a;padding:4px 8px}
+.chip button{background:none;border:0;color:#8a8aa0;font:inherit;margin-left:6px;padding:0}
 form{display:flex;gap:8px;padding:8px;border-top:1px solid #2a2a3a}
 input,textarea{background:#0d0d14;color:inherit;border:1px solid #2a2a3a;padding:12px;font:inherit}
 form input{flex:1}
 form button{background:#6b5bd6;color:#fff;border:0;padding:0 16px;font:inherit}
+#att{background:#0d0d14;color:inherit;border:1px solid #2a2a3a;padding:0 12px}
 .ov{position:fixed;inset:0;background:#06060a;z-index:20;display:flex;flex-direction:column}
 .ov[hidden]{display:none}
 .hd{display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #2a2a3a}
@@ -49,7 +55,9 @@ form button{background:#6b5bd6;color:#fff;border:0;padding:0 16px;font:inherit}
 <div id="side" hidden></div>
 <div id="log"></div>
 <div id="editbar" hidden>Editing a message. <button type="button" id="cancel">Cancel</button></div>
-<form id="f"><input id="t" placeholder="Message" autocomplete="off"><button>Send</button></form>
+<div id="chips" hidden></div>
+<form id="f"><button type="button" id="att">📎</button><input id="t" placeholder="Message" autocomplete="off"><button>Send</button></form>
+<input type="file" id="file" multiple hidden accept="image/*,video/*,.txt,.md,.csv,.json,.js,.py,.html,.css,.xml,.log">
 
 <div id="art" class="ov" hidden>
   <div class="hd"><span>Artifact</span><button id="adl">Download</button><button id="acl">Close</button></div>
@@ -74,6 +82,8 @@ if (secret) localStorage.setItem('app_secret', secret);
 const $ = id => document.getElementById(id);
 let convId = null, msgs = [], convs = [], editing = null, busy = false, lastError = '';
 let skills = [], editingSkill = null, curArt = null;
+let pending = [], proc = false;
+const MAXIMG = 8;
 
 async function api(method, qs, body) {
   const r = await fetch('/api/chat' + (qs || ''), {
@@ -90,6 +100,81 @@ async function api(method, qs, body) {
 const run = fn => async (...a) => { try { await fn(...a); } catch (e) { busy = false; lastError = e.message; render(); } };
 const runA = fn => async (...a) => { try { await fn(...a); } catch (e) { alert(e.message); } };
 
+/* ---------- attachments ---------- */
+function imgCount(list) { return list.reduce((n, a) => n + (a.images ? a.images.length : 0), 0); }
+function renderChips() {
+  const c = $('chips');
+  c.innerHTML = '';
+  pending.forEach((a, i) => {
+    const s = document.createElement('span');
+    s.className = 'chip';
+    s.textContent = (a.kind === 'text' ? '📄 ' : '🖼 ') + a.name;
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.textContent = '✕';
+    x.onclick = () => { pending.splice(i, 1); renderChips(); };
+    s.appendChild(x);
+    c.appendChild(s);
+  });
+  if (proc) { const s = document.createElement('span'); s.className = 'chip'; s.textContent = 'Processing…'; c.appendChild(s); }
+  c.hidden = !pending.length && !proc;
+}
+function loadImg(src) {
+  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Cannot read this image.')); i.src = src; });
+}
+function drawScaled(src, w, h, max, q) {
+  const k = Math.min(1, max / Math.max(w, h));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(w * k));
+  cv.height = Math.max(1, Math.round(h * k));
+  cv.getContext('2d').drawImage(src, 0, 0, cv.width, cv.height);
+  return cv.toDataURL('image/jpeg', q);
+}
+function seek(v, t) {
+  return new Promise((res, rej) => {
+    const to = setTimeout(() => rej(new Error('Video seek timed out.')), 10000);
+    v.onseeked = () => { clearTimeout(to); res(); };
+    v.currentTime = t;
+  });
+}
+async function fileToAtt(file, room) {
+  if (file.type.startsWith('image/')) {
+    if (room < 1) throw new Error('Too many images (max ' + MAXIMG + ').');
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await loadImg(url);
+      return { kind: 'image', name: file.name, images: [drawScaled(img, img.naturalWidth, img.naturalHeight, 1024, 0.7)] };
+    } finally { URL.revokeObjectURL(url); }
+  }
+  if (file.type.startsWith('video/')) {
+    if (room < 6) throw new Error('A video needs room for 6 frames (max ' + MAXIMG + ' images total).');
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.preload = 'auto';
+    try {
+      await new Promise((res, rej) => {
+        v.onloadedmetadata = res;
+        v.onerror = () => rej(new Error('Cannot read this video.'));
+        v.src = url;
+        setTimeout(() => rej(new Error('Video took too long to load.')), 15000);
+      });
+      const dur = v.duration;
+      if (!isFinite(dur) || dur <= 0) throw new Error('Cannot read video length.');
+      const N = 6, frames = [];
+      for (let i = 0; i < N; i++) {
+        await seek(v, dur * (i + 0.5) / N);
+        frames.push(drawScaled(v, v.videoWidth, v.videoHeight, 768, 0.6));
+      }
+      return { kind: 'image', name: file.name, images: frames };
+    } finally { URL.revokeObjectURL(url); }
+  }
+  if (file.size > 300000) throw new Error(file.name + ' is too large (max about 300 KB of text).');
+  const text = await file.text();
+  if (text.includes('\u0000')) throw new Error(file.name + ' is not a plain text file.');
+  return { kind: 'text', name: file.name, text: text.slice(0, 20000) };
+}
+
+/* ---------- messages ---------- */
 function parts(content) {
   const out = [];
   const re = /```(\w*)\n([\s\S]*?)(?:```|$)/g;
@@ -123,6 +208,12 @@ function render() {
     d.className = 'm' + (m.role === 'user' ? ' u' : '');
     if (m.role === 'user') {
       addText(d, m.content);
+      if (m.att && m.att.length) {
+        const a = document.createElement('div');
+        a.className = 'at';
+        a.textContent = '📎 ' + m.att.map(x => x.name).join(', ');
+        d.appendChild(a);
+      }
       if (m.id) {
         const b = document.createElement('button');
         b.className = 'lk';
@@ -179,7 +270,7 @@ async function openConv(id) {
   lastError = '';
   cancelEdit();
   const d = await api('GET', '?conversation=' + id);
-  msgs = d.messages;
+  msgs = d.messages.map(m => ({ ...m, att: m.att_meta || [] }));
   setTitle();
   render();
   $('side').hidden = true;
@@ -195,10 +286,16 @@ async function delConv(id) {
   await loadList();
   if (convId === id) { if (convs.length) await openConv(convs[0].id); else await newChat(); }
 }
-function startEdit(i) { editing = i; $('t').value = msgs[i].content; $('editbar').hidden = false; $('t').focus(); }
+function startEdit(i) {
+  editing = i;
+  $('t').value = msgs[i].content;
+  $('editbar').firstChild.textContent = msgs[i].att && msgs[i].att.length ? 'Editing a message (its attachments are not kept). ' : 'Editing a message. ';
+  $('editbar').hidden = false;
+  $('t').focus();
+}
 function cancelEdit() { editing = null; $('editbar').hidden = true; }
 
-/* skills */
+/* ---------- skills ---------- */
 function renderSkills() {
   const box = $('sklist');
   box.innerHTML = '';
@@ -235,6 +332,7 @@ function renderSkills() {
 async function loadSkills() { const d = await api('GET', '?skills=1'); skills = d.skills; renderSkills(); }
 function clearSkillForm() { editingSkill = null; $('sn').value = ''; $('si').value = ''; $('skform').textContent = 'Add a skill'; }
 
+/* ---------- wiring ---------- */
 $('menu').onclick = () => { $('side').hidden = !$('side').hidden; };
 $('newc').onclick = run(newChat);
 $('cancel').onclick = () => { cancelEdit(); $('t').value = ''; };
@@ -257,26 +355,44 @@ $('adl').onclick = () => {
   a.download = 'artifact.html';
   a.click();
 };
+$('att').onclick = () => $('file').click();
+$('file').onchange = async e => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  proc = true;
+  renderChips();
+  for (const f of files) {
+    try { pending.push(await fileToAtt(f, MAXIMG - imgCount(pending))); }
+    catch (err) { alert(err.message || 'Could not read ' + f.name); }
+  }
+  proc = false;
+  renderChips();
+};
 
 $('f').onsubmit = async e => {
   e.preventDefault();
-  if (busy) return;
-  const text = $('t').value.trim();
-  if (!text) return;
+  if (busy || proc) return;
+  let text = $('t').value.trim();
+  if (!text && !pending.length) return;
+  if (!text) text = 'Please look at the attached file(s).';
+  const atts = pending;
   try {
     if (!convId) await newChat();
     let truncate = null;
     if (editing !== null) { truncate = msgs[editing].id; msgs = msgs.slice(0, editing); cancelEdit(); }
     $('t').value = '';
+    pending = [];
+    renderChips();
     lastError = '';
-    msgs.push({ role: 'user', content: text, id: null });
+    msgs.push({ role: 'user', content: text, id: null, att: atts.map(a => ({ kind: a.kind, name: a.name })) });
     busy = true;
     render();
     const d = await api('POST', '', {
       action: 'chat',
       conversation_id: convId,
       truncate_from_id: truncate,
-      messages: msgs.map(m => ({ role: m.role, content: m.content }))
+      messages: msgs.map(m => ({ role: m.role, content: m.content, id: m.id, att: m.att })),
+      new_attachments: atts
     });
     msgs[msgs.length - 1].id = d.user_id;
     msgs.push({ role: 'assistant', content: d.reply, id: d.assistant_id });
@@ -287,7 +403,9 @@ $('f').onsubmit = async e => {
     busy = false;
     lastError = err.message;
     $('t').value = text;
-    try { const r = await api('GET', '?conversation=' + convId); msgs = r.messages; } catch (_) {}
+    pending = atts;
+    renderChips();
+    try { const r = await api('GET', '?conversation=' + convId); msgs = r.messages.map(m => ({ ...m, att: m.att_meta || [] })); } catch (_) {}
     render();
   }
 };
