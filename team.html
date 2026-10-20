@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Team</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#000;--fg:#fff;--g:#3ecf8e;--ac:#3ecf8e;--w1:rgba(255,255,255,.06);--w2:rgba(255,255,255,.1);--w3:rgba(255,255,255,.18);--dim:rgba(255,255,255,.62);--font:"DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:radial-gradient(120% 40% at 50% -5%,rgba(62,207,142,.09),transparent 70%),var(--bg);color:var(--fg);font-family:var(--font);font-size:16px;line-height:1.55;display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+a{color:inherit;text-decoration:none}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+#top{display:flex;align-items:center;gap:6px;padding:calc(8px + env(safe-area-inset-top)) 10px 6px}
+#top b{flex:1;font-size:18px;font-weight:600;padding-left:4px}
+.ic{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;transition:background .15s,transform .1s}
+.ic:active{background:var(--w2);transform:scale(.92)}
+#view{flex:1;min-height:0;display:flex;flex-direction:column}
+.pg{flex:1;overflow-y:auto;padding:8px 14px 24px}
+.dim{color:var(--dim)}
+.strip{display:flex;gap:8px;overflow-x:auto;padding:6px 12px;flex:none;scrollbar-width:none}
+.strip::-webkit-scrollbar{display:none}
+.agent{flex:none;display:flex;align-items:center;gap:8px;padding:5px 14px 5px 5px;border-radius:24px;border:1px solid var(--w2);background:var(--w1);transition:border-color .15s,transform .1s}
+.agent.on{border-color:var(--ac);background:rgba(255,255,255,.1)}
+.agent:active{transform:scale(.96)}
+.av{width:32px;height:32px;border-radius:50%;background:var(--ac);color:#000;display:grid;place-items:center;font-weight:600;flex:none}
+.av.busy{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.4)}50%{box-shadow:0 0 0 8px rgba(255,255,255,0)}}
+.ahead{display:flex;align-items:center;gap:6px;padding:4px 16px 8px;flex:none}
+.ahead span{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.link{color:var(--dim);font-size:13px;text-decoration:underline}
+.log{flex:1;overflow-y:auto;padding:4px 14px 12px}
+.m{margin:14px 0;animation:rise .28s cubic-bezier(.2,.8,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.m.u{margin-left:auto;max-width:86%;width:fit-content}
+.bub{background:var(--w2);border-radius:20px 20px 6px 20px;padding:9px 15px;white-space:pre-wrap;word-break:break-word}
+.m.a{line-height:1.65}
+.m.a p{margin:0 0 .7em}.m.a p:last-child{margin-bottom:0}
+.m.a ul{margin:.3em 0 .8em;padding-left:1.3em}
+.m.a li::marker{color:var(--ac)}
+.m.a h4{margin:1em 0 .4em}
+.m.a code{font-family:var(--mono);font-size:.85em;background:var(--w2);border-radius:6px;padding:1px 6px}
+.m.err{color:var(--dim);border:1px solid var(--w3);border-radius:16px;padding:10px 14px}
+.tr{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.pillx{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:14px;background:var(--w1);border:1px solid var(--w2);font-size:12.5px;color:var(--dim)}
+.pillx.ok::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--g)}
+.pillx.bad::before{content:"";width:7px;height:7px;border-radius:50%;background:#fff}
+.think{display:flex;align-items:center;gap:10px;color:var(--dim)}
+.orb{width:14px;height:14px;border-radius:50%;background:var(--ac);animation:pulse 1.2s ease-in-out infinite}
+.cmp{display:flex;align-items:flex-end;gap:8px;padding:8px 12px 10px;flex:none}
+.cmp textarea{flex:1;resize:none;min-height:46px;max-height:140px;background:#0d0d0d;border:1px solid var(--w2);border-radius:24px;padding:11px 16px;line-height:1.4;outline:none}
+.cmp textarea:focus{border-color:var(--ac)}
+.send{width:46px;height:46px;border-radius:50%;background:var(--ac);color:#000;display:grid;place-items:center;transition:transform .12s,opacity .2s}
+.send:active{transform:scale(.9)}
+.send:disabled{opacity:.35}
+.card{background:var(--w1);border:1px solid var(--w2);border-radius:20px;padding:14px;margin-bottom:12px}
+.card input[type=text],.card textarea,.card select{width:100%;background:var(--w1);border:1px solid var(--w2);border-radius:12px;padding:11px 12px;margin:6px 0;outline:none}
+.card select option{background:#111}
+.card textarea{min-height:96px;resize:vertical}
+.card input:focus,.card textarea:focus,.card select:focus{border-color:var(--g)}
+.row{display:flex;align-items:center;gap:8px}
+.pill{height:40px;padding:0 18px;border-radius:20px;background:var(--w2);font-weight:500;transition:transform .1s}
+.pill:active{transform:scale(.96)}
+.pill.go{background:var(--g);color:#000}
+.pill:disabled{opacity:.5}
+.chip{display:inline-block;padding:2px 10px;border-radius:12px;background:var(--w2);font-size:12px;color:var(--dim)}
+.chip.working{color:#000;background:var(--g);animation:pulse 1.4s ease-in-out infinite}
+.chip.done{color:var(--g);background:rgba(62,207,142,.14)}
+.chip.failed{color:#fff;background:var(--w3)}
+.task{cursor:pointer}
+.task .t{font-weight:500}
+.res{white-space:pre-wrap;word-break:break-word;margin:10px 0;font-size:14.5px;max-height:50vh;overflow-y:auto}
+.h2{font-size:13px;color:var(--dim);margin:16px 4px 8px;font-weight:500}
+.mem .txt{margin:6px 0 0;word-break:break-word}
+.tree{margin-left:18px;border-left:1px solid var(--w2);padding-left:10px}
+.acard{display:flex;align-items:center;gap:12px}
+.acard .info{flex:1;min-width:0}
+.acard small{color:var(--dim)}
+#nav{display:flex;border-top:1px solid var(--w1);background:rgba(0,0,0,.92);padding-bottom:env(safe-area-inset-bottom);flex:none}
+#nav button{flex:1;padding:10px 0 9px;color:var(--dim);font-size:12.5px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:color .15s}
+#nav button.on{color:var(--g)}
+#toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translate(-50%,10px);background:#fff;color:#000;border-radius:22px;padding:9px 18px;z-index:50;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;max-width:88%;text-align:center;font-size:14px;font-weight:500}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header id="top"><a class="ic" href="/" aria-label="Back to chat" id="back"></a><b>Team</b></header>
+<main id="view"></main>
+<nav id="nav"></nav>
+<div id="toast"></div>
+<script>
+let secret = localStorage.getItem('app_secret') || prompt('Enter app secret');
+if (secret) localStorage.setItem('app_secret', secret);
+const $ = id => document.getElementById(id);
+const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+const ICON = {
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  chat: '<path d="M5 6h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-5 4v-4H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/>',
+  board: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+  mem: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>',
+  team: '<circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.4"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M15 15.5a4.5 4.5 0 0 1 5.5 3.5"/>',
+  up: '<path d="M12 19V5M5 12l7-7 7 7"/>'
+};
+const ic = (n, s) => '<svg width="' + (s || 22) + '" height="' + (s || 22) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[n] + '</svg>';
+$('back').innerHTML = ic('back', 22);
+
+let agents = [], cur = 'matrik', tab = 'chat', hist = {}, tasks = [], mems = [], busyChat = false, openTask = null, memFilter = '', editSlug = null, lastTaskAgent = 'edith';
+
+function toast(m, ms) { const t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.k); toast.k = setTimeout(() => t.classList.remove('on'), ms || 1700); }
+async function api(method, qs, body) {
+  const r = await fetch('/api/agents' + (qs || ''), {
+    method, headers: { 'Content-Type': 'application/json', 'x-app-secret': secret },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  let d = {}, parsed = true;
+  try { d = await r.json(); } catch (e) { parsed = false; }
+  if (r.status === 401) { localStorage.removeItem('app_secret'); throw new Error('Wrong secret. Reload and enter it again.'); }
+  if (!r.ok) throw new Error(typeof d.error === 'string' ? d.error : parsed ? JSON.stringify(d.error || d) : 'The server did not answer in time (HTTP ' + r.status + '). Try a smaller task.');
+  return d;
+}
+const A = s => agents.find(a => a.slug === s);
+function ago(ts) {
+  const s = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000);
+  return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + 'm ago' : s < 86400 ? Math.floor(s / 3600) + 'h ago' : Math.floor(s / 86400) + 'd ago';
+}
+async function copyText(s) {
+  try { await navigator.clipboard.writeText(s); } catch (e) {
+    const ta = document.createElement('textarea'); ta.value = s; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (_) {} ta.remove();
+  }
+  toast('Copied');
+}
+
+/* ---- mini markdown ---- */
+function inl(s) {
+  const f = document.createDocumentFragment();
+  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)/g;
+  let l = 0, m;
+  while ((m = re.exec(s))) {
+    if (m.index > l) f.append(s.slice(l, m.index));
+    const t = m[0];
+    f.append(m[1] ? el('code', '', t.slice(1, -1)) : el('strong', '', t.slice(2, -2)));
+    l = re.lastIndex;
+  }
+  if (l < s.length) f.append(s.slice(l));
+  return f;
+}
+function md(box, text) {
+  const lines = text.split('\n');
+  const li = /^\s*([-*]|\d+[.)])\s+/, hd = /^#{1,3}\s+(.*)$/;
+  let i = 0;
+  while (i < lines.length) {
+    const ln = lines[i];
+    if (!ln.trim()) { i++; continue; }
+    let m;
+    if ((m = hd.exec(ln))) { const h = el('h4'); h.append(inl(m[1])); box.appendChild(h); i++; continue; }
+    if (li.test(ln)) {
+      const ul = el('ul');
+      while (i < lines.length && li.test(lines[i])) { const x = el('li'); x.append(inl(lines[i].replace(li, ''))); ul.appendChild(x); i++; }
+      box.appendChild(ul); continue;
+    }
+    const buf = [];
+    while (i < lines.length && lines[i].trim() && !hd.test(lines[i]) && !li.test(lines[i])) { buf.push(lines[i]); i++; }
+    if (!buf.length) { buf.push(lines[i]); i++; }
+    const p = el('p');
+    buf.forEach((b, k) => { if (k) p.appendChild(el('br')); p.append(inl(b)); });
+    box.appendChild(p);
+  }
+}
+
+/* ---- data ---- */
+async function loadAgents() { agents = (await api('GET', '?agents=1')).agents; }
+async function loadHist(s) { hist[s] = (await api('GET', '?history=' + encodeURIComponent(s))).messages; }
+async function loadTasks() { tasks = (await api('GET', '?tasks=1')).tasks; }
+async function loadMems() { mems = (await api('GET', '?memories=1')).memories; }
+
+/* ---- shell ---- */
+function renderNav() {
+  const nav = $('nav'); nav.innerHTML = '';
+  [['chat', 'Chat'], ['board', 'Board'], ['mem', 'Memory'], ['team', 'Team']].forEach(t => {
+    const b = el('button', tab === t[0] ? 'on' : ''); b.innerHTML = ic(t[0], 22); b.appendChild(el('span', '', t[1]));
+    b.onclick = async () => { tab = t[0]; try { if (tab === 'board') await loadTasks(); if (tab === 'mem') await loadMems(); await loadAgents(); } catch (e) { toast(e.message, 3500); } render(); };
+    nav.appendChild(b);
+  });
+}
+function render() {
+  const keep = $('t') ? $('t').value : '';
+  const v = $('view'); v.innerHTML = '';
+  document.documentElement.style.setProperty('--ac', tab === 'chat' && A(cur) ? A(cur).accent : '#3ecf8e');
+  if (tab === 'chat') viewChat(v); else if (tab === 'board') viewBoard(v); else if (tab === 'mem') viewMem(v); else viewTeam(v);
+  if ($('t')) { $('t').value = keep; autosize(); }
+  renderNav();
+}
+
+/* ---- chat ---- */
+function autosize() { const t = $('t'); if (!t) return; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 140) + 'px'; }
+function msgEl(m) {
+  if (m.role === 'user') { const d = el('div', 'm u'); d.appendChild(el('div', 'bub', m.content)); return d; }
+  if (m.err) return el('div', 'm err', m.content);
+  const d = el('div', 'm a');
+  if (m.trace && m.trace.length) {
+    const tr = el('div', 'tr');
+    m.trace.forEach(t => tr.appendChild(el('span', 'pillx ' + (t.ok ? 'ok' : 'bad'), t.kind === 'delegate' ? 'Handed to ' + t.label : t.label)));
+    d.appendChild(tr);
+  }
+  md(d, m.content);
+  return d;
+}
+function paintLog() {
+  const log = $('log'); if (!log) return;
+  log.innerHTML = '';
+  (hist[cur] || []).forEach(m => log.appendChild(msgEl(m)));
+  if (busyChat) { const d = el('div', 'm think'); d.appendChild(el('div', 'orb')); d.appendChild(el('span', '', (A(cur) ? A(cur).name : 'Agent') + ' is working…')); log.appendChild(d); }
+  if (!(hist[cur] || []).length && !busyChat) log.appendChild(el('p', 'dim', 'Say hello to ' + (A(cur) ? A(cur).name : 'your agent') + '.'));
+  log.scrollTop = log.scrollHeight;
+  const s = $('s'); if (s) s.disabled = busyChat;
+}
+function viewChat(v) {
+  const strip = el('div', 'strip');
+  agents.filter(a => a.enabled).forEach(a => {
+    const b = el('button', 'agent' + (a.slug === cur ? ' on' : '')); b.style.setProperty('--ac', a.accent);
+    b.appendChild(el('span', 'av' + (a.busy ? ' busy' : ''), a.name[0]));
+    b.appendChild(el('span', '', a.name));
+    b.onclick = async () => { cur = a.slug; try { if (!hist[cur]) await loadHist(cur); } catch (e) { toast(e.message, 3500); } render(); };
+    strip.appendChild(b);
+  });
+  const a = A(cur) || { name: '', title: '' };
+  const head = el('div', 'ahead');
+  const nm = el('span'); nm.append(el('b', '', a.name), el('span', 'dim', ' · ' + a.title));
+  const clr = el('button', 'link', 'Clear chat');
+  clr.onclick = async () => { if (!confirm('Clear this chat?')) return; try { await api('POST', '', { action: 'history_clear', agent: cur }); hist[cur] = []; paintLog(); } catch (e) { toast(e.message, 3500); } };
+  head.append(nm, clr);
+  const log = el('div', 'log'); log.id = 'log';
+  const cmp = el('div', 'cmp');
+  const t = el('textarea'); t.id = 't'; t.rows = 1; t.placeholder = 'Message ' + a.name;
+  t.oninput = autosize;
+  t.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); sendChat(); } };
+  const s = el('button', 'send'); s.id = 's'; s.innerHTML = ic('up', 22); s.setAttribute('aria-label', 'Send'); s.onclick = sendChat;
+  cmp.append(t, s);
+  v.append(strip, head, log, cmp);
+  paintLog();
+}
+async function sendChat() {
+  const t = $('t'); if (!t || busyChat) return;
+  const text = t.value.trim(); if (!text) return;
+  t.value = ''; autosize();
+  const slug = cur;
+  (hist[slug] = hist[slug] || []).push({ role: 'user', content: text });
+  busyChat = true; paintLog();
+  try {
+    const d = await api('POST', '', { action: 'chat', agent: slug, message: text });
+    hist[slug].push({ role: 'assistant', content: d.reply, trace: d.trace && d.trace.length ? d.trace : null });
+  } catch (e) {
+    hist[slug].push({ role: 'assistant', content: 'Could not get an answer: ' + e.message, err: true });
+  }
+  busyChat = false;
+  try { await loadAgents(); } catch (e) {}
+  if (tab === 'chat') render();
+}
+
+/* ---- board ---- */
+function paintTasks() {
+  const box = $('tl'); if (!box) return;
+  box.innerHTML = '';
+  if (!tasks.length) { box.appendChild(el('p', 'dim', 'No tasks yet. Run one above, or ask Matrik to delegate.')); return; }
+  tasks.forEach(t => {
+    const c = el('div', 'card task');
+    const top = el('div', 'row');
+    const left = el('div'); left.style.flex = '1'; left.style.minWidth = '0';
+    left.appendChild(el('div', 't', t.title));
+    const who = A(t.assigned_to);
+    left.appendChild(el('small', 'dim', (who ? who.name : t.assigned_to) + ' · from ' + t.assigned_by + ' · ' + ago(t.created_at)));
+    top.append(left, el('span', 'chip ' + t.status, t.status));
+    c.appendChild(top);
+    if (openTask === t.id) {
+      c.appendChild(el('p', 'dim', 'Task: ' + t.brief));
+      if (t.result) {
+        c.appendChild(el('div', 'res', t.result));
+        const cp = el('button', 'link', 'Copy result'); cp.onclick = e => { e.stopPropagation(); copyText(t.result); }; c.appendChild(cp);
+      }
+      if (t.status === 'done') {
+        const fb = el('input'); fb.type = 'text'; fb.placeholder = 'Feedback to teach ' + (who ? who.name : 'them') + '…';
+        fb.style.cssText = 'width:100%;margin-top:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:11px 12px;outline:none';
+        fb.onclick = e => e.stopPropagation();
+        const sv = el('button', 'pill go', 'Save as lesson'); sv.style.marginTop = '8px';
+        sv.onclick = async e => {
+          e.stopPropagation();
+          if (!fb.value.trim()) { toast('Write your feedback first.'); return; }
+          try { await api('POST', '', { action: 'task_feedback', task_id: t.id, note: fb.value.trim() }); fb.value = ''; toast('Lesson saved to memory'); } catch (er) { toast(er.message, 3500); }
+        };
+        c.append(fb, sv);
+      }
+    }
+    c.onclick = () => { openTask = openTask === t.id ? null : t.id; paintTasks(); };
+    box.appendChild(c);
+  });
+}
+function viewBoard(v) {
+  const pg = el('div', 'pg');
+  const card = el('div', 'card');
+  card.appendChild(el('b', '', 'New task'));
+  const sel = el('select');
+  agents.filter(a => a.enabled).forEach(a => { const o = el('option', '', a.name + ' · ' + a.title); o.value = a.slug; sel.appendChild(o); });
+  sel.value = lastTaskAgent;
+  sel.onchange = () => { lastTaskAgent = sel.value; };
+  const ta = el('textarea'); ta.placeholder = 'What should they do?';
+  const run = el('button', 'pill go', 'Run task');
+  run.onclick = async () => {
+    const brief = ta.value.trim();
+    if (!brief) { toast('Write the task first.'); return; }
+    run.disabled = true; run.textContent = 'Running… this can take a few minutes';
+    try { await api('POST', '', { action: 'task_run', agent: sel.value, brief }); ta.value = ''; toast('Task finished'); } catch (e) { toast(e.message, 4500); }
+    try { await loadTasks(); await loadAgents(); } catch (e) {}
+    if (tab === 'board') render();
+  };
+  card.append(sel, ta, run);
+  const h = el('div', 'h2', 'Tasks');
+  const tl = el('div'); tl.id = 'tl';
+  pg.append(card, h, tl);
+  v.appendChild(pg);
+  paintTasks();
+}
+
+/* ---- memory ---- */
+function paintMems() {
+  const box = $('ml'); if (!box) return;
+  box.innerHTML = '';
+  const q = memFilter.trim().toLowerCase();
+  const list = q ? mems.filter(m => m.content.toLowerCase().includes(q) || m.scope.includes(q)) : mems;
+  if (!list.length) { box.appendChild(el('p', 'dim', q ? 'Nothing matches.' : 'Nothing saved yet.')); return; }
+  list.forEach(m => {
+    const c = el('div', 'card mem');
+    const r = el('div', 'row');
+    const sc = A(m.scope);
+    r.append(el('span', 'chip', m.kind), el('span', 'chip', m.scope === 'global' ? 'everyone' : sc ? sc.name : m.scope));
+    const sp = el('span'); sp.style.flex = '1'; r.appendChild(sp);
+    const pin = el('button', 'link', m.pinned ? 'Unpin' : 'Pin');
+    pin.onclick = async () => { try { await api('POST', '', { action: 'memory_pin', id: m.id, pinned: !m.pinned }); await loadMems(); paintMems(); } catch (e) { toast(e.message, 3500); } };
+    const del = el('button', 'link', 'Delete');
+    del.onclick = async () => { if (!confirm('Delete this memory?')) return; try { await api('POST', '', { action: 'memory_delete', id: m.id }); await loadMems(); paintMems(); } catch (e) { toast(e.message, 3500); } };
+    r.append(pin, del);
+    c.append(r, el('p', 'txt', (m.pinned ? '★ ' : '') + m.content));
+    box.appendChild(c);
+  });
+}
+function viewMem(v) {
+  const pg = el('div', 'pg');
+  const add = el('div', 'card');
+  add.appendChild(el('b', '', 'Memo\u2019s library'));
+  add.appendChild(el('p', 'dim', 'What the team remembers. Agents read global notes and their own lessons.'));
+  const scope = el('select'); const g = el('option', '', 'Everyone'); g.value = 'global'; scope.appendChild(g);
+  agents.forEach(a => { const o = el('option', '', a.name); o.value = a.slug; scope.appendChild(o); });
+  const kind = el('select'); ['fact', 'preference', 'lesson'].forEach(k => { const o = el('option', '', k); o.value = k; kind.appendChild(o); });
+  const txt = el('input'); txt.type = 'text'; txt.placeholder = 'Add a memory…';
+  const b = el('button', 'pill go', 'Add');
+  b.onclick = async () => {
+    if (!txt.value.trim()) { toast('Write something first.'); return; }
+    try { await api('POST', '', { action: 'memory_add', scope: scope.value, kind: kind.value, content: txt.value.trim() }); txt.value = ''; await loadMems(); paintMems(); toast('Saved'); } catch (e) { toast(e.message, 3500); }
+  };
+  add.append(scope, kind, txt, b);
+  const q = el('input'); q.type = 'text'; q.placeholder = 'Search memories'; q.value = memFilter;
+  q.style.cssText = 'width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:22px;padding:11px 16px;margin-bottom:12px;outline:none';
+  q.oninput = () => { memFilter = q.value; paintMems(); };
+  const ml = el('div'); ml.id = 'ml';
+  pg.append(add, q, ml);
+  v.appendChild(pg);
+  paintMems();
+}
+
+/* ---- team ---- */
+function agentCard(a) {
+  const c = el('div', 'card');
+  const r = el('div', 'acard'); r.style.setProperty('--ac', a.accent);
+  r.appendChild(el('span', 'av' + (a.busy ? ' busy' : ''), a.name[0]));
+  const info = el('div', 'info');
+  info.appendChild(el('div', '', a.name + (a.enabled ? '' : ' (off)')));
+  info.appendChild(el('small', '', a.title + (a.busy ? ' · working' : '')));
+  const ed = el('button', 'link', editSlug === a.slug ? 'Close' : 'Edit');
+  ed.onclick = () => { editSlug = editSlug === a.slug ? null : a.slug; render(); };
+  r.append(info, ed);
+  c.appendChild(r);
+  if (editSlug === a.slug) {
+    const n = el('input'); n.type = 'text'; n.value = a.name;
+    const t = el('input'); t.type = 'text'; t.value = a.title;
+    const p = el('textarea'); p.value = a.prompt; p.style.minHeight = '160px';
+    const col = el('input'); col.type = 'color'; col.value = a.accent; col.style.cssText = 'width:60px;height:40px;border:0;background:none;padding:0';
+    const en = el('label', 'row'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = a.enabled; en.append(cb, el('span', '', 'Enabled'));
+    const save = el('button', 'pill go', 'Save');
+    save.onclick = async () => {
+      try { await api('POST', '', { action: 'agent_save', slug: a.slug, name: n.value, title: t.value, prompt: p.value, accent: col.value, enabled: cb.checked }); editSlug = null; await loadAgents(); render(); toast('Saved'); } catch (e) { toast(e.message, 3500); }
+    };
+    const row = el('div', 'row'); row.append(col, en); row.style.marginTop = '6px';
+    c.append(n, t, p, row);
+    const btns = el('div', 'row'); btns.style.marginTop = '10px'; btns.appendChild(save);
+    if (a.kind === 'sub') {
+      const del = el('button', 'pill', 'Delete');
+      del.onclick = async () => { if (!confirm('Delete ' + a.name + '? Their tasks and chat go too.')) return; try { await api('POST', '', { action: 'agent_delete', slug: a.slug }); editSlug = null; await loadAgents(); render(); toast('Deleted'); } catch (e) { toast(e.message, 3500); } };
+      btns.appendChild(del);
+    }
+    c.appendChild(btns);
+  }
+  return c;
+}
+function viewTeam(v) {
+  const pg = el('div', 'pg');
+  const kids = p => agents.filter(a => a.parent === p);
+  const subCount = agents.filter(a => a.kind === 'sub').length;
+  pg.appendChild(el('div', 'h2', 'Org chart · ' + subCount + ' of 30 sub-agents'));
+  const draw = (a, host) => {
+    host.appendChild(agentCard(a));
+    const k = kids(a.slug);
+    if (k.length) { const tr = el('div', 'tree'); k.forEach(x => draw(x, tr)); host.appendChild(tr); }
+  };
+  agents.filter(a => !a.parent).forEach(a => draw(a, pg));
+  const add = el('div', 'card');
+  add.appendChild(el('b', '', 'Add a sub-agent'));
+  const slug = el('input'); slug.type = 'text'; slug.placeholder = 'short-id (e.g. colorist)'; slug.autocapitalize = 'off';
+  const name = el('input'); name.type = 'text'; name.placeholder = 'Name';
+  const title = el('input'); title.type = 'text'; title.placeholder = 'Specialty (e.g. Master colorist)';
+  const prompt = el('textarea'); prompt.placeholder = 'Who are they and how do they work? Their master-level instructions.';
+  const parent = el('select');
+  agents.filter(a => a.kind !== 'sub' || true).forEach(a => { const o = el('option', '', 'Reports to ' + a.name); o.value = a.slug; parent.appendChild(o); });
+  parent.value = 'edith';
+  const col = el('input'); col.type = 'color'; col.value = '#3ecf8e'; col.style.cssText = 'width:60px;height:40px;border:0;background:none;padding:0';
+  const go = el('button', 'pill go', 'Create sub-agent');
+  go.onclick = async () => {
+    try { await api('POST', '', { action: 'agent_save', slug: slug.value, name: name.value, title: title.value, prompt: prompt.value, parent: parent.value, accent: col.value }); await loadAgents(); render(); toast('Sub-agent created'); } catch (e) { toast(e.message, 4000); }
+  };
+  add.append(slug, name, title, prompt, parent, col, go);
+  pg.appendChild(add);
+  v.appendChild(pg);
+}
+
+/* ---- init ---- */
+setInterval(async () => {
+  if (document.hidden) return;
+  try {
+    if (tab === 'board' && tasks.some(t => t.status === 'working')) { await loadTasks(); paintTasks(); }
+  } catch (e) {}
+}, 6000);
+(async () => {
+  try { await loadAgents(); await loadHist(cur); } catch (e) { toast(e.message, 4000); }
+  render();
+})();
+</script>
+</body>
+</html>
