@@ -15,6 +15,8 @@ const MAX_ROUNDS = 4;
 const MAX_TOOLS = 40;
 const RESULT_CAP = 6000;
 const MCP_TIMEOUT = 25000;
+const BUDGET_MS = 280000; // vercel.json allows 300 seconds; stop a little before that
+const TIMEOUT_MSG = 'The model took too long to answer. Try a shorter request, or ask in smaller steps.';
 
 const BASE_SYSTEM =
   "You are the assistant inside the user's personal AI hub. " +
@@ -225,7 +227,9 @@ async function loadTools() {
 
 /* ---------------- model loop ---------------- */
 
-async function callLLM(model, messages, tools) {
+async function callLLM(model, messages, tools, deadline) {
+  const left = deadline - Date.now();
+  if (left < 4000) throw new Error('TIMEOUT');
   const body = { model, messages };
   if (tools && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
   const r = await fetch(`${process.env.LLM_BASE_URL}/chat/completions`, {
@@ -235,18 +239,25 @@ async function callLLM(model, messages, tools) {
       Authorization: `Bearer ${process.env.LLM_API_KEY}`,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(left),
+  }).catch(e => {
+    if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) throw new Error('TIMEOUT');
+    throw e;
   });
-  const data = await r.json();
+  const data = await r.json().catch(e => {
+    if (e && (e.name === 'TimeoutError' || e.name === 'AbortError')) throw new Error('TIMEOUT');
+    throw new Error('The model service sent an unreadable reply');
+  });
   if (!r.ok || !data.choices || !data.choices[0]) throw new Error(JSON.stringify(data).slice(0, 500));
   return data.choices[0].message || {};
 }
 
-async function runModel(model, base, tools, ctx) {
+async function runModel(model, base, tools, ctx, deadline) {
   const msgs = [...base];
   const trace = [];
   for (let round = 0; round <= MAX_ROUNDS; round++) {
     const useTools = tools.length > 0 && round < MAX_ROUNDS;
-    const m = await callLLM(model, msgs, useTools ? tools : null);
+    const m = await callLLM(model, msgs, useTools ? tools : null, deadline);
     const calls = useTools && Array.isArray(m.tool_calls) ? m.tool_calls : [];
     if (!calls.length) {
       const reply = typeof m.content === 'string' ? m.content : '';
@@ -281,7 +292,7 @@ async function runModel(model, base, tools, ctx) {
   throw new Error('too many tool rounds');
 }
 
-async function askModel(messages, hasImages) {
+async function askModel(messages, hasImages, deadline) {
   const raw = hasImages && process.env.LLM_VISION_MODEL ? process.env.LLM_VISION_MODEL : process.env.LLM_MODEL || '';
   const models = raw.split(',').map(m => m.trim()).filter(Boolean);
   let ctx = { defs: [], map: {}, sessions: {}, failTrace: [] };
@@ -294,12 +305,13 @@ async function askModel(messages, hasImages) {
   for (const withTools of passes) {
     for (const model of models) {
       try {
-        const out = await runModel(model, base, withTools ? ctx.defs : [], ctx);
+        const out = await runModel(model, base, withTools ? ctx.defs : [], ctx, deadline);
         let reply = out.reply;
         if (!withTools && ctx.defs.length) reply += '\n\n*(Tools were not available for this answer with the current model.)*';
         return { reply, model, trace: [...ctx.failTrace, ...out.trace] };
       } catch (e) {
         lastError = String((e && e.message) || e);
+        if (lastError === 'TIMEOUT') return { error: TIMEOUT_MSG, timeout: true };
       }
     }
   }
@@ -309,6 +321,7 @@ async function askModel(messages, hasImages) {
 /* ---------------- handler ---------------- */
 
 export default async function handler(req, res) {
+  const deadline = Date.now() + BUDGET_MS;
   if (req.headers['x-app-secret'] !== process.env.APP_SECRET)
     return res.status(401).json({ error: 'unauthorized' });
 
@@ -488,8 +501,8 @@ export default async function handler(req, res) {
         return toModelMsg(m.role, content, atts, missing);
       });
 
-      const out = await askModel(model, hasImages);
-      if (out.error) return res.status(502).json({ error: out.error });
+      const out = await askModel(model, hasImages, deadline);
+      if (out.error) return res.status(out.timeout ? 504 : 502).json({ error: out.error });
 
       if (b.truncate_from_id != null && Number.isInteger(Number(b.truncate_from_id))) {
         await sb(`messages?conversation_id=eq.${id}&id=gte.${Number(b.truncate_from_id)}`, { method: 'DELETE' });
