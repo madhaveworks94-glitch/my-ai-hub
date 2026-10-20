@@ -1,1 +1,1 @@
-{ "functions": { "api/chat.js": { "maxDuration": 300 } } }
+{ "functions": { "api/chat.js": { "maxDuration": 300 }, "api/agents.js": { "maxDuration": 300 } } }
